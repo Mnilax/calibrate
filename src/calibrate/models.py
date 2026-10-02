@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+import math
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -18,6 +19,14 @@ class Prediction:
     resolved: bool = False
     outcome: bool | None = None  # True = YES happened, False = NO
     resolved_at: str | None = None
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.probability) or not 0 <= self.probability <= 1:
+            raise ValueError("probability must be finite and between 0 and 1")
+        if not self.question.strip():
+            raise ValueError("question must not be empty")
+        if self.resolved and not isinstance(self.outcome, bool):
+            raise ValueError("a resolved prediction must have a boolean outcome")
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -44,7 +53,7 @@ class PredictionStore:
             id=self.next_id,
             question=question,
             probability=probability,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             category=category,
         )
         self.predictions.append(pred)
@@ -71,7 +80,8 @@ class PredictionStore:
 
     @classmethod
     def from_dict(cls, data: dict) -> PredictionStore:
-        return cls(
-            next_id=data.get("next_id", 1),
-            predictions=[Prediction.from_dict(p) for p in data.get("predictions", [])],
-        )
+        predictions = [Prediction.from_dict(p) for p in data.get("predictions", [])]
+        if len({p.id for p in predictions}) != len(predictions):
+            raise ValueError("duplicate prediction IDs")
+        return cls(next_id=max(data.get("next_id", 1), max((p.id for p in predictions), default=0) + 1),
+                   predictions=predictions)

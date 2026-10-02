@@ -55,11 +55,16 @@ def calibration_bins(
     predictions: list[tuple[float, int]], num_bins: int = 10
 ) -> list[BinStats]:
     """Split predictions into equal-width bins and compute stats."""
+    if not isinstance(num_bins, int) or isinstance(num_bins, bool) or num_bins < 1:
+        raise ValueError("num_bins must be a positive integer")
+    for p, o in predictions:
+        if not math.isfinite(p) or not 0 <= p <= 1 or o not in (0, 1):
+            raise ValueError("predictions require finite probabilities in [0, 1] and binary outcomes")
     bins: list[list[tuple[float, int]]] = [[] for _ in range(num_bins)]
     bin_width = 1.0 / num_bins
 
     for p, o in predictions:
-        idx = min(int(p / bin_width), num_bins - 1)
+        idx = min(int(p * num_bins), num_bins - 1)
         bins[idx].append((p, o))
 
     result = []

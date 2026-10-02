@@ -3,24 +3,21 @@
 from __future__ import annotations
 
 import json
-import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from calibrate import storage
+from calibrate.plot import plot_calibration_curve
 from calibrate.scoring import (
     base_rate,
     brier_score,
-    calibration_bins,
     log_loss,
     murphy_decomposition,
 )
-from calibrate.plot import plot_calibration_curve
 
 app = typer.Typer(
     name="calibrate",
@@ -36,12 +33,15 @@ data_option = typer.Option(None, "--data", help="Override path to data JSON file
 def add(
     question: str = typer.Argument(..., help="The forecast question"),
     probability: float = typer.Argument(..., help="Your P(YES), between 0 and 1"),
-    category: Optional[str] = typer.Option(None, "--category", "-c", help="Category tag"),
-    data: Optional[str] = data_option,
+    category: str | None = typer.Option(None, "--category", "-c", help="Category tag"),
+    data: str | None = data_option,
 ) -> None:
     """Add a new prediction."""
-    if not 0 < probability < 1:
-        console.print("[red]Error:[/red] probability must be between 0 and 1 (exclusive)")
+    if not 0 <= probability <= 1:
+        console.print("[red]Error:[/red] probability must be between 0 and 1")
+        raise typer.Exit(1)
+    if not question.strip():
+        console.print("[red]Error:[/red] question must not be empty")
         raise typer.Exit(1)
 
     store = storage.load(data)
@@ -56,7 +56,7 @@ def list_predictions(
     open: bool = typer.Option(False, "--open", help="Show only open predictions"),
     resolved: bool = typer.Option(False, "--resolved", help="Show only resolved predictions"),
     all: bool = typer.Option(False, "--all", help="Show all predictions"),
-    data: Optional[str] = data_option,
+    data: str | None = data_option,
 ) -> None:
     """List predictions."""
     store = storage.load(data)
@@ -107,7 +107,7 @@ def list_predictions(
 def resolve(
     pred_id: int = typer.Argument(..., help="Prediction ID to resolve"),
     outcome: str = typer.Argument(..., help="Outcome: yes or no"),
-    data: Optional[str] = data_option,
+    data: str | None = data_option,
 ) -> None:
     """Resolve a prediction with its outcome."""
     outcome_lower = outcome.lower()
@@ -128,7 +128,7 @@ def resolve(
 
     pred.resolved = True
     pred.outcome = outcome_lower == "yes"
-    pred.resolved_at = datetime.now(timezone.utc).isoformat()
+    pred.resolved_at = datetime.now(UTC).isoformat()
     storage.save(store, data)
 
     result = "[green]YES[/green]" if pred.outcome else "[red]NO[/red]"
@@ -138,7 +138,7 @@ def resolve(
 @app.command()
 def score(
     by_category: bool = typer.Option(False, "--by-category", help="Break down by category"),
-    data: Optional[str] = data_option,
+    data: str | None = data_option,
 ) -> None:
     """Compute Brier score, log loss, and Murphy decomposition."""
     store = storage.load(data)
@@ -198,8 +198,8 @@ def score(
 @app.command()
 def plot(
     out: str = typer.Option("assets/calibration.png", "--out", help="Output PNG path"),
-    bins: int = typer.Option(10, "--bins", help="Number of calibration bins"),
-    data: Optional[str] = data_option,
+    bins: int = typer.Option(10, "--bins", min=1, help="Number of calibration bins"),
+    data: str | None = data_option,
 ) -> None:
     """Generate calibration curve PNG."""
     store = storage.load(data)
@@ -216,13 +216,16 @@ def plot(
 
 @app.command()
 def seed(
-    data: Optional[str] = data_option,
+    data: str | None = data_option,
 ) -> None:
     """Load sample predictions from examples/sample_predictions.json."""
+    if storage.load(data).predictions:
+        console.print("[red]Error:[/red] seed requires an empty store; use --data with a new path")
+        raise typer.Exit(1)
     # Find the examples file relative to package
     examples_paths = [
         Path(__file__).parent.parent.parent / "examples" / "sample_predictions.json",
-        Path.cwd() / "examples" / "sample_predictions.json",
+        Path(__file__).parent / "data" / "sample_predictions.json",
     ]
 
     sample_path = None

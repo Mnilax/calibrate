@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 
 from calibrate.models import PredictionStore
@@ -33,5 +35,15 @@ def load(data_path: str | None = None) -> PredictionStore:
 def save(store: PredictionStore, data_path: str | None = None) -> None:
     """Save predictions to JSON file."""
     path = get_data_path(data_path)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(store.to_dict(), f, indent=2, ensure_ascii=False)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=f".{path.name}.", suffix=".tmp", delete=False) as f:
+            temporary_path = Path(f.name)
+            json.dump(store.to_dict(), f, indent=2, ensure_ascii=False, allow_nan=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)

@@ -20,3 +20,9 @@ calibrate = "calibrate.cli:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/calibrate"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"examples/sample_predictions.json" = "calibrate/data/sample_predictions.json"

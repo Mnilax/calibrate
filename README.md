@@ -93,6 +93,7 @@ All metrics use only resolved predictions. Let `p` = your probability, `o` ∈ {
 ## Data storage
 
 Predictions are stored in `~/.calibrate/predictions.json`. Override with `--data <path>` on any command.
+Writes replace the file atomically. `calibrate seed` requires an empty store and refuses to overwrite existing predictions; use `calibrate seed --data demo.json` for a separate demo. Sample data is bundled in the wheel, so seeding also works after `uv tool install .`.
 
 ## Roadmap
 
